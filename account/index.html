@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Files — Free Upload Manager</title>
+  <link rel="icon" type="image/png" href="../images/logo.png">
+  <link rel="stylesheet" href="../css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="min-h-screen p-4" x-data="accountApp()" x-init="init()">
+
+  <div class="text-center mb-1">
+    <a href="../index.html" class="inline-flex items-center gap-3 no-underline">
+      <img src="../images/logo.png" alt="Free Upload Manager" class="h-12 w-auto">
+      <h1 class="text-3xl font-bold mt-1 mb-0 text-foreground">FREE UPLOAD MANAGER</h1>
+    </a>
+    <p class="mt-0 text-muted-foreground">Fast and reliable file hosting — stored on GitHub.</p>
+  </div>
+
+  <div class="text-center mb-4 text-sm">
+    <a href="../index.html" class="hover:underline font-medium">Index</a>
+    <span class="mx-1">|</span>
+    <a href="../settings/index.html" class="hover:underline text-primary">Settings</a>
+    <span class="mx-1">|</span>
+    <a href="../account/index.html" class="hover:underline text-primary">My Files</a>
+    <span class="mx-1">|</span>
+    <a href="../help/index.html" class="hover:underline text-primary">Help</a>
+  </div>
+
+  <div class="mx-auto max-w-[60rem]">
+    <div class="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+      <h2 class="text-lg font-bold mb-0">My uploaded files</h2>
+      <button @click="clearHistory()" x-show="history.length > 0"
+        class="px-3 py-1 border border-border rounded-sm bg-background hover:bg-muted text-sm cursor-pointer">
+        Clear history
+      </button>
+    </div>
+
+    <p class="text-sm text-muted-foreground mb-4">
+      Upload history is stored in this browser only. Files themselves are on GitHub and remain available
+      even if you clear this list.
+    </p>
+
+    <template x-if="history.length === 0">
+      <p class="text-sm text-muted-foreground">No uploads yet. <a href="../index.html" class="text-primary hover:underline">Upload a file →</a></p>
+    </template>
+
+    <template x-if="history.length > 0">
+      <table class="text-sm w-full border-collapse">
+        <thead>
+          <tr class="text-left text-muted-foreground border-b border-border">
+            <th class="py-2 pr-4 font-medium">File</th>
+            <th class="py-2 pr-4 font-medium">Size</th>
+            <th class="py-2 pr-4 font-medium">Date</th>
+            <th class="py-2 font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="(item, i) in history" :key="item.id">
+            <tr class="border-b border-border">
+              <td class="py-2 pr-4 break-all">
+                <a :href="item.file_url" class="text-primary hover:underline" x-text="item.file_name"></a>
+              </td>
+              <td class="py-2 pr-4 whitespace-nowrap" x-text="humanSize(item.file_size)"></td>
+              <td class="py-2 pr-4 whitespace-nowrap text-muted-foreground" x-text="fmtDate(item.created_date)"></td>
+              <td class="py-2 whitespace-nowrap">
+                <a :href="item.raw_url" target="_blank" rel="noopener"
+                  class="text-primary hover:underline mr-3">GitHub ↗</a>
+                <button @click="remove(i)"
+                  class="text-muted-foreground hover:text-destructive bg-transparent border-none p-0 cursor-pointer text-sm">Remove</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </template>
+  </div>
+
+  <script>
+    function accountApp() {
+      return {
+        history: [],
+
+        init() {
+          this.history = JSON.parse(localStorage.getItem('fum_history') || '[]');
+        },
+
+        humanSize(b) {
+          if (!b) return '—';
+          const u = ['B','KB','MB','GB','TB'];
+          const i = Math.floor(Math.log(b) / Math.log(1024));
+          return parseFloat((b / Math.pow(1024, i)).toFixed(2)) + ' ' + u[i];
+        },
+
+        fmtDate(iso) {
+          if (!iso) return '—';
+          try { return new Date(iso).toLocaleDateString(); } catch (_) { return iso; }
+        },
+
+        remove(i) {
+          this.history.splice(i, 1);
+          localStorage.setItem('fum_history', JSON.stringify(this.history));
+        },
+
+        clearHistory() {
+          if (!confirm('Remove all upload history from this browser? The files on GitHub are unaffected.')) return;
+          this.history = [];
+          localStorage.removeItem('fum_history');
+        },
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Free Upload Manager</title>
+  <meta name="description" content="A limitless, secure file sharing platform that stores files directly on GitHub.">
+  <link rel="icon" type="image/png" href="images/logo.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    .progress-bar-wrap { height: 18px; background: hsl(var(--muted)); border-radius: 3px; overflow: hidden; }
+    .progress-bar-inner { height: 100%; background: hsl(var(--foreground)); transition: width .3s ease; }
+    .progress-bar-inner.error { background: hsl(var(--destructive)); }
+    button:disabled { opacity: .5; cursor: default; }
+    textarea { background: hsl(var(--background)); color: hsl(var(--foreground)); border: 1px solid hsl(var(--border)); }
+    textarea:focus { outline: none; border-color: hsl(var(--primary)); }
+    .warning-box { border: 1px solid hsl(var(--destructive)); border-radius: 4px; padding: 10px 14px; font-size: 0.85rem; }
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="min-h-screen p-4" x-data="app()" x-init="init()">
+
+  <!-- Logo -->
+  <div class="text-center mb-1">
+    <a href="index.html" class="inline-flex items-center gap-3 no-underline">
+      <img src="images/logo.png" alt="Free Upload Manager" class="h-12 w-auto">
+      <h1 class="text-3xl font-bold mt-1 mb-0 text-foreground">FREE UPLOAD MANAGER</h1>
+    </a>
+    <p class="mt-0 text-muted-foreground">Fast and reliable file hosting — stored on GitHub.</p>
+  </div>
+
+  <!-- Navbar -->
+  <div class="text-center mb-4 text-sm">
+    <a href="index.html" class="hover:underline font-medium">Index</a>
+    <span class="mx-1">|</span>
+    <a href="settings/index.html" class="hover:underline text-primary">Settings</a>
+    <span class="mx-1">|</span>
+    <a href="account/index.html" class="hover:underline text-primary">My Files</a>
+    <span class="mx-1">|</span>
+    <a href="help/index.html" class="hover:underline text-primary">Help</a>
+  </div>
+
+  <!-- Main content -->
+  <div class="mx-auto max-w-[60rem]">
+
+    <!-- Not configured warning -->
+    <div class="warning-box mb-4" x-show="!configured" x-cloak>
+      <strong>GitHub not configured.</strong>
+      You need to set your GitHub repository and token before uploading.
+      <a href="settings/index.html" class="text-primary hover:underline ml-1">Go to Settings →</a>
+    </div>
+
+    <p class="mb-3">Free Upload Manager stores your files as GitHub Release assets — no external service required.</p>
+
+    <div class="flex flex-col">
+      <!-- File input -->
+      <div class="flex flex-wrap gap-4 items-center">
+        <input type="file" id="file-input" multiple class="text-sm">
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex flex-wrap gap-2 items-center mt-2">
+        <button @click="upload()" :disabled="uploading || !configured"
+          class="px-3 py-1 border border-border rounded-sm bg-background hover:bg-muted text-sm cursor-pointer disabled:opacity-50">
+          Upload
+        </button>
+        <button @click="showNote = true" x-show="!showNote"
+          class="px-3 py-1 border border-border rounded-sm bg-background hover:bg-muted text-sm cursor-pointer">
+          Add Note
+        </button>
+        <button @click="cancel()" :disabled="!uploading"
+          class="px-3 py-1 border border-border rounded-sm bg-background hover:bg-muted text-sm cursor-pointer disabled:opacity-50">
+          Cancel
+        </button>
+        <button @click="copyLinks()" :disabled="completed.length === 0"
+          class="px-3 py-1 border border-border rounded-sm bg-background hover:bg-muted text-sm cursor-pointer disabled:opacity-50"
+          x-text="copyText">
+        </button>
+      </div>
+
+      <!-- Note textarea -->
+      <div class="mt-2" x-show="showNote" x-cloak>
+        <textarea class="pt-1 border rounded-sm w-full sm:w-3/4 p-2 text-sm" rows="1"
+          maxlength="500"
+          placeholder="Notes to display under the download link (e.g., file password, description)."
+          x-model="note"></textarea>
+      </div>
+
+      <!-- Upload queue -->
+      <ul x-show="queue.length > 0 || completed.length > 0" class="ps-4 mt-3 list-none" x-cloak>
+        <template x-for="(task, i) in queue" :key="i">
+          <li x-show="task.status !== 'completed'" class="mb-3">
+            <div class="flex flex-col gap-1">
+              <span class="text-sm" x-text="task.name"></span>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-inner"
+                  :class="{ error: task.status === 'error' }"
+                  :style="`width:${task.progress}%`"></div>
+              </div>
+              <span class="text-sm"
+                :class="{ 'text-destructive': task.status === 'error' }"
+                x-text="task.statsText"></span>
+            </div>
+          </li>
+        </template>
+        <template x-for="(item, i) in completed" :key="'done' + i">
+          <li class="text-sm py-1">
+            <a :href="item.link" target="_blank" class="hover:underline text-primary"
+              x-text="`${item.name} — ${item.sizeText}`"></a>
+          </li>
+        </template>
+      </ul>
+    </div>
+
+    <h4>How it works</h4>
+    <ul>
+      <li>Files are uploaded as GitHub Release assets — stored directly in your repository.</li>
+      <li>Download links are permanent GitHub URLs, independent of any third-party service.</li>
+      <li>No file size limits beyond GitHub's 2 GB per asset.</li>
+      <li>All uploads require your own GitHub token — your files, your control.</li>
+      <li>Upload history is saved locally in your browser.</li>
+    </ul>
+    <p class="mt-4 text-sm text-muted-foreground">Files uploaded to public repositories are publicly accessible. Use a private repository if you need restricted access.</p>
+  </div>
+
+  <script>
+    function app() {
+      return {
+        configured : false,
+        queue      : [],
+        completed  : [],
+        showNote   : false,
+        note       : '',
+        copyText   : 'Copy links',
+        uploading  : false,
+        _xhrs      : [],
+
+        init() {
+          this.configured = !!(
+            localStorage.getItem('gh_owner') &&
+            localStorage.getItem('gh_repo') &&
+            localStorage.getItem('gh_token')
+          );
+        },
+
+        humanSize(b) {
+          if (!b) return '0 B';
+          const u = ['B','KB','MB','GB','TB'];
+          const i = Math.floor(Math.log(b) / Math.log(1024));
+          return parseFloat((b / Math.pow(1024, i)).toFixed(2)) + ' ' + u[i];
+        },
+
+        async upload() {
+          const input = document.getElementById('file-input');
+          const files = Array.from(input.files || []);
+          if (!files.length) return;
+
+          const owner = localStorage.getItem('gh_owner');
+          const repo  = localStorage.getItem('gh_repo');
+          const token = localStorage.getItem('gh_token');
+
+          // Create one release for this entire upload session
+          const tag     = 'upload-' + Date.now();
+          const relName = files.length === 1
+            ? files[0].name
+            : `${files.length} files — ${new Date().toLocaleString()}`;
+
+          this.uploading = true;
+          this._xhrs = [];
+
+          // Step 1: create GitHub release
+          let release;
+          try {
+            const resp = await fetch(
+              `https://api.github.com/repos/${owner}/${repo}/releases`,
+              {
+                method : 'POST',
+                headers: {
+                  'Authorization': `token ${token}`,
+                  'Content-Type' : 'application/json',
+                  'Accept'       : 'application/vnd.github.v3+json',
+                },
+                body: JSON.stringify({
+                  tag_name: tag,
+                  name    : relName,
+                  draft   : false,
+                  prerelease: false,
+                }),
+              }
+            );
+            if (!resp.ok) {
+              const err = await resp.json().catch(() => ({}));
+              throw new Error(err.message || `GitHub API error ${resp.status}`);
+            }
+            release = await resp.json();
+          } catch (err) {
+            // Show error on all files
+            alert('Could not create GitHub release: ' + err.message);
+            this.uploading = false;
+            return;
+          }
+
+          const uploadBase = release.upload_url.replace('{?name,label}', '');
+
+          // Step 2: upload each file as a release asset
+          for (let idx = 0; idx < files.length; idx++) {
+            const file    = files[idx];
+            const task    = {
+              name      : file.name,
+              progress  : 0,
+              status    : 'inprogress',
+              statsText : 'Starting…',
+              sizeText  : this.humanSize(file.size),
+            };
+            this.queue.push(task);
+            const taskRef   = this.queue[this.queue.length - 1];
+            const startTime = Date.now();
+
+            const onProgress = e => {
+              if (!e.lengthComputable) return;
+              const pct     = Math.round(e.loaded / e.total * 95) + 5;
+              const elapsed = (Date.now() - startTime) / 1000;
+              const speed   = elapsed > 0 ? this.humanSize(e.loaded / elapsed) + '/s' : '';
+              taskRef.progress  = pct;
+              taskRef.statsText = `${this.humanSize(e.loaded)} / ${this.humanSize(file.size)}${speed ? ' — ' + speed : ''}`;
+            };
+
+            try {
+              taskRef.statsText = 'Uploading to GitHub…';
+              const downloadUrl = await this._uploadAsset(
+                uploadBase, owner, repo, token, file, taskRef, onProgress
+              );
+
+              // Build our download page URL
+              const dlParams = new URLSearchParams({
+                name: file.name,
+                size: file.size,
+                url : downloadUrl,
+              });
+              if (this.note) dlParams.set('note', this.note);
+              const ourLink = 'download/index.html?' + dlParams.toString();
+
+              const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+              const speed   = this.humanSize(file.size / (parseFloat(elapsed) || 1)) + '/s';
+              taskRef.progress  = 100;
+              taskRef.status    = 'completed';
+              taskRef.statsText = `Done in ${elapsed}s (${speed})`;
+              this.completed.push({ name: file.name, link: ourLink, sizeText: this.humanSize(file.size) });
+
+              // Save to local history
+              const history = JSON.parse(localStorage.getItem('fum_history') || '[]');
+              history.unshift({
+                id          : 'gh_' + Date.now() + '_' + idx,
+                file_name   : file.name,
+                file_size   : file.size,
+                file_url    : ourLink,
+                raw_url     : downloadUrl,
+                note        : this.note || undefined,
+                release_tag : tag,
+                created_date: new Date().toISOString(),
+              });
+              localStorage.setItem('fum_history', JSON.stringify(history.slice(0, 500)));
+
+            } catch (err) {
+              taskRef.status    = 'error';
+              taskRef.statsText = `Error: ${err.message}`;
+              taskRef.progress  = 100;
+            }
+          }
+
+          this.uploading = false;
+          input.value   = '';
+        },
+
+        _uploadAsset(uploadBase, owner, repo, token, file, taskRef, onProgress) {
+          return new Promise((resolve, reject) => {
+            const url = `${uploadBase}?name=${encodeURIComponent(file.name)}`;
+            const xhr = new XMLHttpRequest();
+            this._xhrs.push(xhr);
+            xhr.open('POST', url, true);
+            xhr.setRequestHeader('Authorization', `token ${token}`);
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
+            xhr.upload.onprogress = onProgress;
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                  const asset = JSON.parse(xhr.responseText);
+                  resolve(asset.browser_download_url);
+                } catch (_) {
+                  reject(new Error('Invalid response from GitHub'));
+                }
+              } else {
+                let msg = `HTTP ${xhr.status}`;
+                try { msg = JSON.parse(xhr.responseText).message || msg; } catch (_) {}
+                reject(new Error(msg));
+              }
+            };
+            xhr.onerror = () => reject(new Error('Network error'));
+            xhr.onabort = () => reject(new Error('cancelled'));
+            xhr.send(file);
+          });
+        },
+
+        cancel() {
+          this._xhrs.forEach(x => { try { x.abort(); } catch(_) {} });
+          this._xhrs = [];
+        },
+
+        copyLinks() {
+          const text = this.completed.map(c => window.location.origin + '/' + c.link).join('\n');
+          navigator.clipboard.writeText(text).catch(() => {
+            const t = Object.assign(document.createElement('textarea'), { value: text });
+            document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
+          });
+          this.copyText = 'Copied!';
+          setTimeout(() => this.copyText = 'Copy links', 2000);
+        }
+      };
+    }
+  </script>
+</body>
+</html>
